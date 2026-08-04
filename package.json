@@ -1,0 +1,27 @@
+{
+  "name": "ymu-website",
+  "version": "1.0.0",
+  "description": "The official website for the YimMenuUpdater (YMU) project, built with Eleventy.",
+  "scripts": {
+    "start": "npx @11ty/eleventy --serve",
+    "build": "node --env-file-if-exists=.env scripts/fetch-scores.mjs && cross-env NODE_ENV=production npx @11ty/eleventy && npm run minify-js",
+    "minify-js": "terser _site/assets/js/script.js --config-file terser.config.json --output _site/assets/js/script.js",
+    "scores": "node --env-file-if-exists=.env scripts/fetch-scores.mjs"
+  },
+  "keywords": [
+    "eleventy",
+    "11ty",
+    "static-site",
+    "yimmenu",
+    "ymu",
+    "yimmenuupdater"
+  ],
+  "author": "NiiV3AU",
+  "license": "CC-BY-NC-SA-4.0",
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.6",
+    "cross-env": "^10.1.0",
+    "html-minifier-next": "7.4.0",
+    "terser": "5.49.0"
+  }
+}
