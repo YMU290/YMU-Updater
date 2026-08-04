@@ -1,0 +1,102 @@
+name: YMU-SU Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    name: Build YMU-SU
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies from requirements file.
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pyinstaller flake8
+
+      - name: Verify With Flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Build Executable
+        run: |
+          pyinstaller ymu_self_updater.py --noconfirm --onefile --console --icon "./icon/ymu.ico"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ymu-updater-binary
+          path: dist/ymu_self_updater.exe
+
+  create_release:
+    runs-on: ubuntu-latest
+    name: Create Rolling "Latest" Release
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - name: Delete Old "Latest" Release and Tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = "latest";
+
+            try {
+              // Get the release associated with the 'latest' tag
+              const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+
+              // Delete the release
+              console.log(`Deleting release with ID ${release.data.id}`);
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: release.data.id });
+
+              // Delete the tag ref
+              console.log(`Deleting tag ${tag}`);
+              await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
+
+            } catch (error) {
+              if (error.status === 404) {
+                console.log("No existing 'latest' release or tag found. Proceeding to create a new one.");
+              } else {
+                console.error(`An error occurred: ${error.message}`);
+                throw error;
+              }
+            }
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ymu-updater-binary
+
+      - name: Calculate SHA256 Checksum
+        id: build_sha
+        run: |
+          sha256sum ymu_self_updater.exe > sha256.checksum
+          echo "checksum_val=$(awk '{ print $1 }' sha256.checksum)" >> $GITHUB_OUTPUT
+          cat sha256.checksum
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: YMU-SU (Latest)
+          tag_name: latest
+          body: |
+            **This is the latest automated build of the YMU Self-Updater.**
+
+            This executable is downloaded by YMU to perform self-updates.
+
+            **SHA256 Checksum:**
+            `${{ steps.build_sha.outputs.checksum_val }}`
+
+            ---
+            *Built by [GitHub Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*
+          files: |
+            ymu_self_updater.exe
